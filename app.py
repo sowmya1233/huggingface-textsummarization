@@ -17,7 +17,7 @@ def extract_text_from_docx(file):
     return "\n".join([para.text for para in doc.paragraphs])
 
 # Streamlit App
-st.title("📄 AI Document Assistant (Hugging Face NLP)")
+st.title("📄 AI Document Assistant ")
 
 uploaded_file = st.file_uploader("Upload a PDF or DOCX", type=["pdf", "docx"])
 if uploaded_file:
