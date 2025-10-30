@@ -3,11 +3,17 @@ import pdfplumber
 import docx
 from transformers import pipeline
 
-# Load models using PyTorch to avoid TensorFlow & Rust build issues
-summarizer = pipeline("summarization", model="t5-small", framework="pt")
-qa = pipeline("question-answering", model="deepset/roberta-base-squad2", framework="pt")
-grammar_fixer = pipeline("text2text-generation", model="t5-small", framework="pt")
+# --- Load models with caching ---
+@st.cache_resource
+def load_models():
+    summarizer = pipeline("summarization", model="t5-small", framework="pt", device=-1)
+    qa = pipeline("question-answering", model="deepset/roberta-base-squad2", framework="pt", device=-1)
+    grammar_fixer = pipeline("text2text-generation", model="t5-small", framework="pt", device=-1)
+    return summarizer, qa, grammar_fixer
 
+summarizer, qa, grammar_fixer = load_models()
+
+# --- Helper functions ---
 def extract_text_from_pdf(file):
     with pdfplumber.open(file) as pdf:
         return "\n".join([page.extract_text() for page in pdf.pages if page.extract_text()])
@@ -16,7 +22,10 @@ def extract_text_from_docx(file):
     doc = docx.Document(file)
     return "\n".join([para.text for para in doc.paragraphs])
 
-# Streamlit App
+def truncate_text(text, max_chars=2000):
+    return text[:max_chars] if len(text) > max_chars else text
+
+# --- Streamlit UI ---
 st.title("📄 AI Document Assistant")
 
 uploaded_file = st.file_uploader("Upload a PDF or DOCX", type=["pdf", "docx"])
@@ -35,7 +44,7 @@ if uploaded_file:
     if action == "Summarize":
         if st.button("Summarize"):
             summary = summarizer(
-                "summarize: " + text[:2000],  # adjust input size if needed
+                "summarize: " + truncate_text(text),
                 max_length=150,
                 min_length=50,
                 do_sample=False
@@ -47,13 +56,13 @@ if uploaded_file:
         if st.button("Get Answer") and question:
             answer = qa(
                 question=question,
-                context=text[:2000]  # adjust input size if needed
+                context=truncate_text(text)
             )
             st.success(answer['answer'])
 
     elif action == "Fix Grammar":
         if st.button("Correct Grammar"):
             corrected = grammar_fixer(
-                "fix grammar: " + text[:512]  # keep input within token limit
+                "fix grammar: " + truncate_text(text, max_chars=512)
             )[0]['generated_text']
             st.success(corrected)
